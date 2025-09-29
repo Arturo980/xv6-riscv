@@ -37,7 +37,6 @@ Se recorre la cadena de ancestros hasta llegar al *n*-ésimo. Si `n=0` se retorn
 El programa `yosoytupadre.c` prueba diferentes escenarios:
 
 * En el proceso principal: muestra el PID, el PPID y los ancestros.
-* En procesos hijo y nieto: imprime la jerarquía y sus ancestros.
 * Casos especiales: cuando `n` es negativo o cuando se pide un ancestro que no existe.
 
 ## Dificultades Encontradas
