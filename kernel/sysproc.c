@@ -105,3 +105,36 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64
+sys_getppid(void)
+{
+  struct proc *p = myproc();
+  if(p->parent == 0)
+    return -1;  // No parent (init process)
+  return p->parent->pid;
+}
+
+uint64
+sys_getancestor(void)
+{
+  int n;
+  struct proc *p = myproc();
+  
+  argint(0, &n);  // Get the argument from user space
+  
+  if(n < 0)
+    return -1;
+    
+  if(n == 0)
+    return p->pid;  // Return current process
+    
+  // Traverse up the ancestor chain
+  for(int i = 0; i < n; i++) {
+    if(p->parent == 0)
+      return -1;  // No more ancestors
+    p = p->parent;
+  }
+  
+  return p->pid;
+}
