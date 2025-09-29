@@ -34,10 +34,16 @@ Se recorre la cadena de ancestros hasta llegar al *n*-ésimo. Si `n=0` se retorn
 
 ## Programa de Prueba
 
+
 El programa `yosoytupadre.c` prueba diferentes escenarios:
 
-* En el proceso principal: muestra el PID, el PPID y los ancestros.
-* Casos especiales: cuando `n` es negativo o cuando se pide un ancestro que no existe.
+**En el proceso principal:**
+- Se imprime el PID y el PPID para mostrar la relación básica entre el proceso y su padre.
+- Para mostrar los ancestros, se utiliza un bucle `for` que recorre los valores de `n` desde 0 hasta 3. Esto permite ver fácilmente cómo la llamada `getancestor(n)` retorna el PID del propio proceso, el padre, el abuelo y el bisabuelo, respectivamente. Usar un bucle hace el código más compacto y flexible, ya que si se quisiera probar más niveles, solo habría que cambiar el rango del for.
+- Además, se imprime el resultado de `getancestor(10)`. Este caso sirve para mostrar qué ocurre cuando se pide un ancestro que no existe (por ejemplo, si el proceso no tiene tantos padres en la cadena). Así se verifica que la función retorna -1 correctamente en situaciones fuera del rango esperado.
+
+**Casos especiales:**
+- Se prueba también con valores negativos para confirmar que la función retorna -1 cuando el parámetro no es válido.
 
 ## Dificultades Encontradas
 
