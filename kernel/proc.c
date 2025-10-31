@@ -146,6 +146,10 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  // Initialize lottery scheduling fields
+  p->tickets = 100;      // Default number of tickets
+  p->run_slices = 0;     // Initialize scheduling counter
+
   return p;
 }
 
@@ -414,7 +418,7 @@ kwait(uint64 addr)
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
-//  - choose a process to run.
+//  - choose a process to run using lottery scheduling.
 //  - swtch to start running that process.
 //  - eventually that process transfers control
 //    via swtch back to the scheduler.
@@ -423,7 +427,7 @@ scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
-
+  
   c->proc = 0;
   for(;;){
     // The most recent process to run may have had interrupts
@@ -434,27 +438,49 @@ scheduler(void)
     intr_on();
     intr_off();
 
-    int found = 0;
+    // Lottery Scheduling Implementation
+    int total_tickets = 0;
+    
+    // First pass: count total tickets of RUNNABLE processes
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
       if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
-
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
-        found = 1;
+        total_tickets += p->tickets;
       }
       release(&p->lock);
     }
-    if(found == 0) {
-      // nothing to run; stop running on this core until an interrupt.
+    
+    // If no runnable processes or no tickets, wait for interrupt
+    if(total_tickets == 0) {
       asm volatile("wfi");
+      continue;
+    }
+    
+    // Generate random number in range [1, total_tickets]
+    // Using ticks as source of randomness with a simple LCG
+    uint random = (ticks * 1103515245 + 12345) % total_tickets + 1;
+    
+    // Second pass: select winner process
+    int counter = 0;
+    for(p = proc; p < &proc[NPROC]; p++) {
+      acquire(&p->lock);
+      if(p->state == RUNNABLE) {
+        counter += p->tickets;
+        if(counter >= random) {
+          // Winner found! Switch to this process
+          p->state = RUNNING;
+          p->run_slices++;  // Increment scheduling counter
+          c->proc = p;
+          swtch(&c->context, &p->context);
+          
+          // Process is done running for now.
+          // It should have changed its p->state before coming back.
+          c->proc = 0;
+          release(&p->lock);
+          break;
+        }
+      }
+      release(&p->lock);
     }
   }
 }
