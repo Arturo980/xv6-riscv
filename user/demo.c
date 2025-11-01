@@ -2,14 +2,14 @@
 #include "kernel/stat.h"
 #include "user/user.h"
 
-#define NUM_PROCESOS 10
-#define ITERACIONES_TRABAJO 1000000
+#define NUM_PROCESSES 10
+#define WORK_ITERATIONS 1000000
 
 // Realizar trabajo intensivo de CPU
-void hacer_trabajo(int iteraciones) {
-  volatile int suma = 0;
-  for (int i = 0; i < iteraciones; i++) {
-    suma += i;
+void do_work(int iterations) {
+  volatile int sum = 0;
+  for (int i = 0; i < iterations; i++) {
+    sum += i;
   }
 }
 
@@ -17,9 +17,9 @@ int main(int argc, char *argv[]) {
   int i;
   
   printf("Demo de Planificacion por Loteria\n");
-  printf("Creando %d procesos con diferentes valores de tickets\n\n", NUM_PROCESOS);
+  printf("Creando %d procesos con diferentes valores de tickets\n\n", NUM_PROCESSES);
   
-  for (i = 0; i < NUM_PROCESOS; i++) {
+  for (i = 0; i < NUM_PROCESSES; i++) {
     int pid = fork();
     
     if (pid < 0) {
@@ -35,21 +35,21 @@ int main(int argc, char *argv[]) {
       printf("Proceso %d: PID=%d, Tickets=%d iniciado\n", i, getpid(), tickets);
       
       // Hacer algo de trabajo
-      int contador_trabajo = 0;
+      int work_count = 0;
       for (int j = 0; j < 5; j++) {
-        hacer_trabajo(ITERACIONES_TRABAJO);
-        contador_trabajo++;
+        do_work(WORK_ITERATIONS);
+        work_count++;
       }
       
       printf("Proceso %d: PID=%d, Tickets=%d completo %d unidades de trabajo\n", 
-             i, getpid(), tickets, contador_trabajo);
+             i, getpid(), tickets, work_count);
       exit(0);
     }
   }
   
   // Padre espera a todos los hijos
   printf("\nPadre esperando a que terminen todos los hijos...\n\n");
-  for (i = 0; i < NUM_PROCESOS; i++) {
+  for (i = 0; i < NUM_PROCESSES; i++) {
     wait(0);
   }
   
