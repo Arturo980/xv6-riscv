@@ -1,7 +1,12 @@
 # Tarea 3: Protección de Lectura en XV6
 
 **Grupo:** Grupo13_T3  
-**Rama:** Grupo13_T3
+
+**Alumnos** 
+- Arturo Figueroa
+- Diego Pinos
+
+**Rama:** Sistemas Operativos
 
 ## Descripción General
 
