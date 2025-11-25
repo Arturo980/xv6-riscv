@@ -484,3 +484,97 @@ ismapped(pagetable_t pagetable, uint64 va)
   }
   return 0;
 }
+
+// Remove read permission from user pages.
+// Mark the region [addr, addr + len*PGSIZE) as no-read by clearing PTE_R bit.
+// Returns 0 on success, -1 on error.
+int
+mrdprotect(pagetable_t pagetable, uint64 addr, int len)
+{
+  uint64 a;
+  pte_t *pte;
+
+  // Check if addr is page-aligned
+  if((addr % PGSIZE) != 0)
+    return -1;
+
+  // Check if len is valid
+  if(len <= 0)
+    return -1;
+
+  // Check if address range is in user space
+  if(addr >= MAXVA)
+    return -1;
+
+  // Iterate through each page in the range
+  for(a = addr; a < addr + len * PGSIZE; a += PGSIZE){
+    // Check if we're still in valid user space
+    if(a >= MAXVA)
+      return -1;
+
+    // Get the PTE for this virtual address
+    pte = walk(pagetable, a, 0);
+    
+    // Check if PTE exists and is valid
+    if(pte == 0)
+      return -1;
+    if((*pte & PTE_V) == 0)
+      return -1;
+    
+    // Check if it's a user page
+    if((*pte & PTE_U) == 0)
+      return -1;
+
+    // Clear the read bit (PTE_R) while preserving other bits
+    *pte = *pte & ~PTE_R;
+  }
+
+  return 0;
+}
+
+// Restore read permission to user pages.
+// Mark the region [addr, addr + len*PGSIZE) as readable by setting PTE_R bit.
+// Returns 0 on success, -1 on error.
+int
+munrdprotect(pagetable_t pagetable, uint64 addr, int len)
+{
+  uint64 a;
+  pte_t *pte;
+
+  // Check if addr is page-aligned
+  if((addr % PGSIZE) != 0)
+    return -1;
+
+  // Check if len is valid
+  if(len <= 0)
+    return -1;
+
+  // Check if address range is in user space
+  if(addr >= MAXVA)
+    return -1;
+
+  // Iterate through each page in the range
+  for(a = addr; a < addr + len * PGSIZE; a += PGSIZE){
+    // Check if we're still in valid user space
+    if(a >= MAXVA)
+      return -1;
+
+    // Get the PTE for this virtual address
+    pte = walk(pagetable, a, 0);
+    
+    // Check if PTE exists and is valid
+    if(pte == 0)
+      return -1;
+    if((*pte & PTE_V) == 0)
+      return -1;
+    
+    // Check if it's a user page
+    if((*pte & PTE_U) == 0)
+      return -1;
+
+    // Set the read bit (PTE_R) while preserving other bits
+    *pte = *pte | PTE_R;
+  }
+
+  return 0;
+}
