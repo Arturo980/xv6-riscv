@@ -190,36 +190,38 @@ int main() {
 
 1. **Primera escritura (`addr[0] = 'Z'`):** Éxito
 2. **Protección (`mrdprotect`):** Éxito - La página ahora no tiene permiso de lectura
-3. **Segunda escritura (`addr[0] = 'A'`):** Éxito - La escritura sigue permitida
-4. **Lectura (`char c = addr[0]`):** **PAGE FAULT** - El proceso termina aquí
+3. **Segunda escritura (`addr[0] = 'A'`):** **PAGE FAULT** - El proceso termina aquí
+4. **Lectura (`char c = addr[0]`):** No se ejecuta (proceso ya terminado)
 5. **Desprotección (`munrdprotect`):** No se ejecuta (proceso ya terminado)
 6. **Mensaje final:** No se imprime (proceso ya terminado)
 
-**Explicación técnica:** Cuando se intenta leer de una página sin `PTE_R`, el hardware RISC-V genera una excepción de load page fault (scause=13). El kernel de XV6 no tiene un manejador de recuperación para este tipo de fallo en espacio de usuario, por lo que termina el proceso inmediatamente. Esto demuestra que la protección funciona correctamente.
+**Explicación técnica:** Cuando se quita el bit `PTE_R` (permiso de lectura), el hardware RISC-V también bloquea las escrituras debido a que la especificación RISC-V no permite páginas "write-only" (solo escritura). Según el estándar RISC-V Sv39, la combinación R=0, W=1 está **reservada/inválida**. Por lo tanto, al intentar escribir en una página sin `PTE_R`, el hardware genera una excepción de store page fault (scause=15). Esto demuestra que la protección funciona, aunque bloquea tanto lecturas como escrituras.
+
+**Limitación del Hardware RISC-V:** No es posible implementar memoria "solo escritura" usando únicamente los bits de la PTE en RISC-V. Para lograr el comportamiento ideal (escritura permitida, lectura bloqueada), sería necesario implementar un manejador personalizado de page faults en el kernel que distinga entre loads y stores.
 
 **Salida esperada en consola:**
 ```
 $ rdprotect_test
 === Test de Protección de Lectura ===
 
-[OK] Paso 1: Página reservada en dirección 0x4000
+[OK] Paso 1: Página reservada en dirección 0x0000000000004000
 [OK] Paso 2: Escritura inicial exitosa (valor='Z')
+DEBUG: Llamando mrdprotect(addr=0x0000000000004000, len=1)
+DEBUG: addr % PGSIZE = 0 (debe ser 0)
+DEBUG: mrdprotect retornó 0
 [OK] Paso 3: Protección aplicada exitosamente (mrdprotect)
-[OK] Paso 4: Escritura en página protegida exitosa (valor='A')
-
-[ADVERTENCIA] Paso 5: Intentando LEER de página protegida...
-              ESPERADO: El proceso debe terminar con page fault
-
-usertrap(): unexpected scause 0x000000000000000d pid=3
-            sepc=0x0000000000000XXX stval=0x0000000000004000
+usertrap(): unexpected scause 0x000000000000000f pid=3
+            sepc=0x94 stval=0x4000
 $
 ```
 
 **Interpretación de la salida:**
-- Los pasos 1-4 muestran que todas las operaciones previas funcionaron correctamente
-- El paso 5 advierte que viene el intento de lectura prohibida
-- El mensaje `usertrap(): unexpected scause 0xd` confirma que la protección funcionó (page fault)
-- Si vieras el mensaje "[ERROR] Lectura exitosa", significaría que la protección falló
+- Los pasos 1-3 muestran que todas las operaciones previas funcionaron correctamente
+- `mrdprotect` retorna 0, indicando éxito al quitar el bit `PTE_R`
+- El proceso termina al intentar escribir en la página protegida (Paso 4)
+- `scause 0xf` = Store/AMO page fault (intento de escritura en página sin permisos)
+- `stval 0x4000` = Dirección de la página que causó el fallo
+- Esto confirma que quitar `PTE_R` efectivamente bloquea el acceso a la página (lecturas Y escrituras)
 
 ## Compilación y Ejecución
 
@@ -254,10 +256,15 @@ rdprotect_test
 
 ### Limitaciones
 
-1. **No protege contra escritura:** Las páginas siguen siendo escribibles
-2. **No protege contra kernel:** El kernel aún puede acceder a estas páginas
-3. **No protege contra DMA:** Dispositivos con acceso directo a memoria pueden leer
-4. **Page fault termina proceso:** No hay recuperación automática de lecturas prohibidas
+1. **Limitación del Hardware RISC-V:** La especificación RISC-V no permite páginas "write-only" (R=0, W=1 está reservado). Al quitar `PTE_R`, también se bloquean las escrituras. Para lograr verdadera memoria "solo escritura", se requeriría un manejador personalizado de page faults que diferencie entre loads y stores.
+
+2. **No protege contra kernel:** El kernel aún puede acceder a estas páginas usando direcciones físicas directas.
+
+3. **No protege contra DMA:** Dispositivos con acceso directo a memoria pueden leer/escribir bypass del MMU.
+
+4. **Page fault termina proceso:** No hay recuperación automática. El proceso muere al primer acceso prohibido.
+
+5. **Granularidad de página:** La protección opera a nivel de página completa (4KB), no a nivel de bytes individuales.
 
 ## Estructura del Código
 
@@ -312,16 +319,14 @@ Ejecuta el test dentro de XV6:
 $ rdprotect_test
 === Test de Protección de Lectura ===
 
-[OK] Paso 1: Página reservada en dirección 0x4000
+[OK] Paso 1: Página reservada en dirección 0x0000000000004000
 [OK] Paso 2: Escritura inicial exitosa (valor='Z')
+DEBUG: Llamando mrdprotect(addr=0x0000000000004000, len=1)
+DEBUG: addr % PGSIZE = 0 (debe ser 0)
+DEBUG: mrdprotect retornó 0
 [OK] Paso 3: Protección aplicada exitosamente (mrdprotect)
-[OK] Paso 4: Escritura en página protegida exitosa (valor='A')
-
-[ADVERTENCIA] Paso 5: Intentando LEER de página protegida...
-              ESPERADO: El proceso debe terminar con page fault
-
-usertrap(): unexpected scause 0xd pid=3
-            sepc=0x30 stval=0x4000
+usertrap(): unexpected scause 0xf pid=3
+            sepc=0x94 stval=0x4000
 $
 ```
 
@@ -329,14 +334,15 @@ $
 
 | Qué Ver | Significado |
 |---------|-------------|
-| [OK] Pasos 1-4 completos | Las operaciones básicas funcionan |
-| [ADVERTENCIA] Aviso del Paso 5 | El test está por intentar lectura prohibida |
-| `usertrap(): unexpected scause` | **La protección FUNCIONÓ correctamente** |
-| Proceso termina | **Comportamiento esperado** |
+| [OK] Pasos 1-3 completos | La protección se aplicó correctamente |
+| `mrdprotect retornó 0` | La syscall ejecutó exitosamente |
+| `scause 0xf` (Store page fault) | **La protección FUNCIONÓ** - bloqueó el acceso a la página |
+| Proceso termina después del Paso 3 | **Comportamiento esperado en RISC-V** |
 
 **Criterios de Fallo:**
 
 | Qué Ver | Problema |
 |---------|----------|
-| "[ERROR] Lectura exitosa" | La protección NO funcionó |
-| Mensaje final impreso | El proceso no terminó (protección falló) |
+| `mrdprotect retornó -1` | Error al aplicar la protección |
+| Paso 4 se ejecuta completamente | La protección NO se aplicó |
+| No hay page fault | El bit `PTE_R` no se modificó correctamente |
