@@ -340,13 +340,3 @@ $
 |---------|----------|
 | "[ERROR] Lectura exitosa" | La protección NO funcionó |
 | Mensaje final impreso | El proceso no terminó (protección falló) |
-
-### Test Alternativo para Validar `munrdprotect`
-
-Para validar que `munrdprotect` restaura correctamente los permisos, necesitarías un test modificado que:
-1. Proteja la página con `mrdprotect`
-2. Escriba en ella (sin leer)
-3. Desproteja con `munrdprotect` 
-4. Luego lea exitosamente sin page fault
-
-Esto no está incluido en el test principal porque el objetivo es demostrar que la protección **bloquea** las lecturas.
